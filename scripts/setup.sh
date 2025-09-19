@@ -22,19 +22,62 @@ echo -e "${BLUE}  Seed-VC CPU Setup Script      ${NC}"
 echo -e "${BLUE}  Ubuntu 22.04 VPS Installation ${NC}"
 echo -e "${BLUE}================================${NC}"
 
-# Check if running as root
+# Check if running as root and handle appropriately
 if [[ $EUID -eq 0 ]]; then
-   echo -e "${RED}This script should not be run as root${NC}"
-   exit 1
+   echo -e "${YELLOW}Running as root - will create non-root user for application${NC}"
+   
+   # Create seedvc user if not exists
+   if ! id "seedvc" &>/dev/null; then
+       echo -e "${YELLOW}Creating seedvc user...${NC}"
+       useradd -m -s /bin/bash seedvc
+       usermod -aG sudo seedvc
+       echo "seedvc ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+   fi
+   
+   # Set up project directory
+   PROJECT_DIR="/home/seedvc/seed-vc-cpu"
+   mkdir -p $PROJECT_DIR
+   
+   # Copy project files to user directory
+   if [ "$PWD" != "$PROJECT_DIR" ]; then
+       echo -e "${YELLOW}Copying project files to $PROJECT_DIR...${NC}"
+       cp -r . $PROJECT_DIR/
+       chown -R seedvc:seedvc $PROJECT_DIR
+   fi
+   
+   # Continue setup as seedvc user
+   echo -e "${YELLOW}Continuing setup as seedvc user...${NC}"
+   cd $PROJECT_DIR
+   sudo -u seedvc bash "$0" "$@"
+   exit $?
+else
+   echo -e "${GREEN}Running as user: $(whoami)${NC}"
+   PROJECT_DIR="$HOME/seed-vc-cpu"
+   
+   # If not in project directory, create it
+   if [ ! -f "package.json" ] && [ "$PWD" != "$PROJECT_DIR" ]; then
+       mkdir -p $PROJECT_DIR
+       cd $PROJECT_DIR
+   fi
 fi
 
 # Update system
 echo -e "${YELLOW}Updating system packages...${NC}"
-sudo apt update && sudo apt upgrade -y
+if [[ $EUID -eq 0 ]]; then
+    apt update && apt upgrade -y
+else
+    sudo apt update && sudo apt upgrade -y
+fi
 
 # Install system dependencies
 echo -e "${YELLOW}Installing system dependencies...${NC}"
-sudo apt install -y \
+if [[ $EUID -eq 0 ]]; then
+    APT_CMD="apt install -y"
+else
+    APT_CMD="sudo apt install -y"
+fi
+
+$APT_CMD \
     build-essential \
     curl \
     wget \
@@ -60,19 +103,32 @@ sudo apt install -y \
     pkg-config \
     nginx \
     htop \
-    tree
+    tree \
+    redis-server
 
 # Install Docker
 if ! command -v docker &> /dev/null; then
     echo -e "${YELLOW}Installing Docker...${NC}"
     curl -fsSL https://get.docker.com -o get-docker.sh
-    sudo sh get-docker.sh
-    sudo usermod -aG docker $USER
+    
+    if [[ $EUID -eq 0 ]]; then
+        sh get-docker.sh
+        usermod -aG docker seedvc
+    else
+        sudo sh get-docker.sh
+        sudo usermod -aG docker $USER
+    fi
+    
     rm get-docker.sh
     
     # Install Docker Compose
-    sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
+    if [[ $EUID -eq 0 ]]; then
+        curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+    else
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+    fi
 else
     echo -e "${GREEN}Docker already installed${NC}"
 fi
@@ -80,17 +136,29 @@ fi
 # Install Python 3.9 if not available
 if ! command -v python3.9 &> /dev/null; then
     echo -e "${YELLOW}Installing Python 3.9...${NC}"
-    sudo apt install -y software-properties-common
-    sudo add-apt-repository ppa:deadsnakes/ppa -y
-    sudo apt update
-    sudo apt install -y python3.9 python3.9-dev python3.9-venv python3-pip
+    if [[ $EUID -eq 0 ]]; then
+        apt install -y software-properties-common
+        add-apt-repository ppa:deadsnakes/ppa -y
+        apt update
+        apt install -y python3.9 python3.9-dev python3.9-venv python3-pip
+    else
+        sudo apt install -y software-properties-common
+        sudo add-apt-repository ppa:deadsnakes/ppa -y
+        sudo apt update
+        sudo apt install -y python3.9 python3.9-dev python3.9-venv python3-pip
+    fi
 fi
 
 # Install Node.js 18
 if ! command -v node &> /dev/null || [[ "$(node -v | cut -d'v' -f2 | cut -d'.' -f1)" -lt "18" ]]; then
     echo -e "${YELLOW}Installing Node.js 18...${NC}"
-    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-    sudo apt install -y nodejs
+    if [[ $EUID -eq 0 ]]; then
+        curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+        apt install -y nodejs
+    else
+        curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+        sudo apt install -y nodejs
+    fi
 fi
 
 # Install pnpm
@@ -101,8 +169,26 @@ fi
 
 # Create project directories
 echo -e "${YELLOW}Creating project directories...${NC}"
-mkdir -p ~/seed-vc-cpu/{uploads,outputs,models,logs,ssl}
-cd ~/seed-vc-cpu
+if [[ $EUID -eq 0 ]]; then
+    USER_HOME="/home/seedvc"
+    PROJECT_DIR="$USER_HOME/seed-vc-cpu"
+else
+    USER_HOME="$HOME"
+    PROJECT_DIR="$USER_HOME/seed-vc-cpu"
+fi
+
+mkdir -p $PROJECT_DIR/{uploads,outputs,models,logs,ssl}
+
+# If we're not already in the project directory, copy files there
+if [ "$PWD" != "$PROJECT_DIR" ] && [ -f "package.json" ]; then
+    echo -e "${YELLOW}Copying project files to $PROJECT_DIR...${NC}"
+    cp -r . $PROJECT_DIR/
+    if [[ $EUID -eq 0 ]]; then
+        chown -R seedvc:seedvc $PROJECT_DIR
+    fi
+fi
+
+cd $PROJECT_DIR
 
 # Setup Python virtual environment
 echo -e "${YELLOW}Setting up Python virtual environment...${NC}"
