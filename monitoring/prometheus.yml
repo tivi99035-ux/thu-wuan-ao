@@ -1,0 +1,67 @@
+# Prometheus Configuration for Seed-VC CPU Multi-User Monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "rules/*.yml"
+
+scrape_configs:
+  # System metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  # Application metrics
+  - job_name: 'seed-vc-backend'
+    static_configs:
+      - targets: 
+        - 'backend-1:8000'
+        - 'backend-2:8000'
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  # Frontend metrics
+  - job_name: 'seed-vc-frontend'
+    static_configs:
+      - targets:
+        - 'frontend-1:3000'
+        - 'frontend-2:3000'
+    scrape_interval: 30s
+    
+  # Redis metrics
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 10s
+
+  # HAProxy metrics
+  - job_name: 'haproxy'
+    static_configs:
+      - targets: ['loadbalancer:8404']
+    scrape_interval: 10s
+    metrics_path: /stats?stats;csv
+
+  # Custom application metrics
+  - job_name: 'seed-vc-custom'
+    static_configs:
+      - targets:
+        - 'backend-1:8000'
+        - 'backend-2:8000'
+    scrape_interval: 5s
+    metrics_path: /system/metrics
+    scrape_timeout: 10s
+
+# Alerting rules (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Remote write (optional for long-term storage)
+# remote_write:
+#   - url: "http://remote-prometheus:9090/api/v1/write"

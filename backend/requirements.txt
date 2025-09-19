@@ -1,0 +1,45 @@
+# FastAPI and server dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+websockets==12.0
+
+# Async file operations
+aiofiles==23.2.1
+aiohttp==3.9.1
+
+# Audio processing
+soundfile==0.12.1
+librosa==0.10.1
+numpy==1.24.3
+scipy==1.11.4
+
+# Machine Learning (CPU-optimized)
+onnxruntime==1.16.3
+torch==2.1.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+torchaudio==2.1.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+
+# Multi-user and scaling support
+redis==5.0.1
+aioredis==2.0.1
+celery==5.3.4
+
+# Process and system monitoring
+psutil==5.9.6
+python-dotenv==1.0.0
+loguru==0.7.2
+
+# Performance optimization
+orjson==3.9.10
+ujson==5.8.0
+msgpack==1.0.7
+
+# Security and rate limiting
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+slowapi==0.1.9
+
+# Optional: Database support (if needed)
+# sqlalchemy==2.0.23
+# alembic==1.13.1
